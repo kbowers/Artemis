@@ -1,0 +1,70 @@
+import { fetch } from 'wix-fetch';
+import { getSecret } from 'wix-secrets-backend';
+
+/**
+ * Sends payload data to n8n webhook
+ * @param {Object} payload - The data to send to n8n
+ * @returns {Promise<Object>} - Returns { ok: true } on success
+ * @throws {Error} - Throws error with status and text on failure
+ */
+export async function sendToN8n(payload) {
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 300; // milliseconds
+    const TIMEOUT = 5000; // 5 seconds
+    
+    try {
+        // Read the webhook URL from Wix secrets
+        const webhookUrl = await getSecret('N8N_WEBHOOK_URL');
+        
+        if (!webhookUrl) {
+            throw new Error('N8N_WEBHOOK_URL secret not found');
+        }
+        
+        // Prepare the request data
+        const requestData = {
+            payload: payload,
+            source: "wix"
+        };
+        
+        // Attempt the request with retries
+        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                const response = await fetch(webhookUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                }).timeout(TIMEOUT);
+                
+                // Check if response is successful (2xx status)
+                if (response.ok) {
+                    return { ok: true };
+                } else {
+                    // If not the last attempt, wait and retry
+                    if (attempt < MAX_RETRIES) {
+                        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (attempt + 1)));
+                        continue;
+                    }
+                    
+                    // On final attempt, throw error with status and text
+                    const errorText = await response.text();
+                    throw new Error(`HTTP ${response.status}: ${errorText}`);
+                }
+                
+            } catch (fetchError) {
+                // If this is the last attempt, throw the error
+                if (attempt === MAX_RETRIES) {
+                    throw new Error(`Request failed after ${MAX_RETRIES + 1} attempts: ${fetchError.message}`);
+                }
+                
+                // Wait before retry with exponential backoff
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (attempt + 1)));
+            }
+        }
+        
+    } catch (error) {
+        // Re-throw any errors that occur during the process
+        throw new Error(`sendToN8n failed: ${error.message}`);
+    }
+}

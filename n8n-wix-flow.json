@@ -1,0 +1,179 @@
+{
+  "name": "Wix Forms to Wix API Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wix-events",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Wix Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "wix-events-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "Webhook received successfully",
+        "options": {}
+      },
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// items[0].json is the webhook body\nconst { payload } = items[0].json;\n\n// Extract form data\nconst { formId, submission } = payload;\n\n// Map form submission to Wix API format\n// Adjust this mapping based on your form fields and Wix API requirements\nconst contactData = {\n  contact: {\n    info: {\n      emails: [{ email: submission.email || submission.Email || '' }],\n      phones: [{ phone: submission.phone || submission.Phone || '' }],\n      name: {\n        first: submission.firstName || submission['First Name'] || '',\n        last: submission.lastName || submission['Last Name'] || ''\n      }\n    },\n    tags: [`form-${formId}`, 'n8n-import'],\n    customFields: {\n      formId: formId,\n      submissionTime: new Date().toISOString(),\n      source: 'wix-form'\n    }\n  }\n};\n\n// Add any additional fields from the form submission\nif (submission.message || submission.Message) {\n  contactData.contact.info.notes = submission.message || submission.Message;\n}\n\nif (submission.company || submission.Company) {\n  contactData.contact.info.company = submission.company || submission.Company;\n}\n\nreturn [{ json: contactData }];"
+      },
+      "id": "function-node",
+      "name": "Shape Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.wixapis.com/contacts/v4/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wixApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "http-request-node",
+      "name": "Create Wix Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        300
+      ],
+      "credentials": {
+        "wixApi": {
+          "id": "wix-api-credentials",
+          "name": "Wix API Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "log",
+        "message": "Contact created successfully: {{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "log-success",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "log",
+        "message": "Error creating contact: {{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "log-error",
+      "name": "Log Error",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Wix Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Shape Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shape Data": {
+      "main": [
+        [
+          {
+            "node": "Create Wix Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Wix Contact": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "wix-forms-to-api-flow",
+  "tags": []
+}

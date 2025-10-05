@@ -1,0 +1,230 @@
+{
+  "name": "Wix Forms to CRM + Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wix/form-submitted",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "wix-form-submitted-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\n  \"received\": true\n}",
+        "options": {}
+      },
+      "id": "respond-to-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// items[0].json is the webhook body\nconst body = items[0].json;\nconst sub = body?.payload?.submission || {};\n\n// Map your form labels -> contact fields\nconst email = sub['Email'] || sub['email'] || '';\nconst firstName = sub['First Name'] || sub['first_name'] || '';\nconst lastName  = sub['Last Name'] || sub['last_name'] || '';\nconst note      = sub['Message'] || sub['message'] || '';\n\n// Build Wix CRM Contacts payload\n// For Wix CRM v1 contacts:\nconst wixContact = {\n  // See Wix docs for full schema; this is a minimal example\n  info: {\n    name: { first: firstName, last: lastName },\n    emails: email ? [{ email }] : []\n  },\n  // You can add notes/tags/addresses if supported by your API\n  // customFields: [...]\n};\n\nconst slackText =\n  `New form: *${body?.payload?.formTitle || 'Unknown'}*\\n` +\n  `*Name:* ${firstName} ${lastName}\\n` +\n  `*Email:* ${email}\\n` +\n  (note ? `*Message:* ${note}\\n` : '');\n\nreturn [\n  {\n    json: {\n      wixContact,\n      slackText,\n      // pass along siteId if you want to set it on the next node via expression\n      siteId: $json.siteId || '' // or set statically in next node\n    }\n  }\n];"
+      },
+      "id": "function-node",
+      "name": "Function (map fields)",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.wixapis.com/crm/v1/contacts",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wixApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "wix-site-id",
+              "value": "<YOUR_SITE_ID>"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "={{ $json[\"wixContact\"] }}",
+        "options": {
+          "sendBodyAs": "json"
+        }
+      },
+      "id": "wix-crm-request",
+      "name": "HTTP Request (Wix CRM Contact)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        200
+      ],
+      "credentials": {
+        "wixApi": {
+          "id": "wix-api-credentials",
+          "name": "Wix API Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $credentials.slackWebhook.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": []
+        },
+        "jsonBody": "{\n  \"text\": \"{{ $json.slackText }}\"\n}",
+        "options": {
+          "sendBodyAs": "json"
+        }
+      },
+      "id": "slack-webhook-request",
+      "name": "HTTP Request (Slack webhook)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        900,
+        400
+      ],
+      "credentials": {
+        "slackWebhook": {
+          "id": "slack-webhook-credentials",
+          "name": "Slack Webhook Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "log",
+        "message": "Wix contact created successfully: {{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "log-wix-success",
+      "name": "Log Wix Success",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "log",
+        "message": "Slack notification sent: {{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "id": "log-slack-success",
+      "name": "Log Slack Success",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond to Webhook": {
+      "main": [
+        [
+          {
+            "node": "Function (map fields)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Function (map fields)": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request (Wix CRM Contact)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request (Slack webhook)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (Wix CRM Contact)": {
+      "main": [
+        [
+          {
+            "node": "Log Wix Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request (Slack webhook)": {
+      "main": [
+        [
+          {
+            "node": "Log Slack Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "wix-forms-to-crm-slack",
+  "tags": []
+}

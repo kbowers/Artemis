@@ -59,6 +59,22 @@ PORT=3000
 JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
 ```
 
+## Docker Hub Configuration
+
+To use Docker Hub instead of GitHub Container Registry, update the workflow environment variables:
+
+1. Set your Docker Hub username in `.github/workflows/ci.yml`:
+   ```yaml
+   env:
+     DOCKERHUB_USER: your-dockerhub-username
+     IMAGE_NAME: your-dockerhub-username/notes-api
+   ```
+
+2. Add your Docker Hub token as a GitHub secret:
+   - Go to your repository settings
+   - Navigate to "Secrets and variables" → "Actions"
+   - Add a new secret named `DOCKERHUB_TOKEN` with your Docker Hub access token
+
 ## Scripts
 
 - `npm run dev` - Start development server with hot reload
@@ -72,7 +88,7 @@ This project includes GitHub Actions workflow for:
 
 - ✅ **Automated Testing** - Runs tests on every push and PR
 - 🏗️ **TypeScript Build** - Validates TypeScript compilation
-- 🐳 **Docker Build** - Builds and pushes Docker images to GitHub Container Registry
+- 🐳 **Docker Build** - Builds and pushes Docker images to Docker Hub
 - 📦 **Multi-Platform** - Supports multiple architectures
 
 ## Status Badges

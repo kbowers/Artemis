@@ -22,13 +22,19 @@ In your Wix dashboard, add a secret named `N8N_WEBHOOK_URL`:
 
 ### 2. Import the Module
 
+**Backend Usage:**
+```javascript
+import { sendToN8n } from 'backend/n8n.jsw';
+```
+
+**Frontend Usage:**
 ```javascript
 import { sendToN8n } from 'backend/n8n.jsw';
 ```
 
 ## Usage
 
-### Basic Usage
+### Backend Usage
 
 ```javascript
 import { sendToN8n } from 'backend/n8n.jsw';
@@ -47,6 +53,32 @@ export async function myFunction() {
         console.error('Error:', error.message);
     }
 }
+```
+
+### Frontend Usage (Wix Forms)
+
+```javascript
+import { sendToN8n } from 'backend/n8n.jsw';
+
+$w.onReady(() => {
+  $w('#wixForms1').onWixFormSubmitted(async (event) => {
+    const submission = event.fields; // contains label/value pairs
+    
+    try {
+      await sendToN8n({ 
+        formId: event.formId, 
+        submission,
+        timestamp: new Date().toISOString(),
+        source: 'wix-form'
+      });
+      
+      console.log('Form submission sent to n8n successfully');
+      
+    } catch (err) {
+      console.error('Failed to send form data to n8n:', err);
+    }
+  });
+});
 ```
 
 ### Function Signature
